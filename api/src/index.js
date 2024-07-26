@@ -24,20 +24,9 @@ const addStripeClient = async (req, res, next) => {
         // Next
         next();
     }
-    catch (e) {
-        res.json({ error: "Failed to connect to database", detail: e }).status(500);
+    catch {
+        res.json({ error: "Failed to connect to database" }).status(500);
     }
-};
-// ======= Functions =======
-// F1: Calculate basket total
-const getBasketTotal = (fruitBasket) => {
-    let amount = 0;
-    fruitBasket.forEach((fruit) => {
-        const { quantity, cost } = fruit;
-        const fruitCost = quantity * cost;
-        amount += fruitCost;
-    });
-    return amount;
 };
 // ======= Endpoints =======
 // EP1: Sense check endpoint
@@ -50,7 +39,12 @@ app.post("/paymentIntent", addStripeClient, async (req, res) => {
     const { fruitBasket, } = req.body;
     if (fruitBasket) {
         try {
-            const amount = getBasketTotal(fruitBasket);
+            let amount = 0;
+            fruitBasket.forEach((fruit) => {
+                const { quantity, cost } = fruit;
+                const fruitCost = quantity * cost;
+                amount += fruitCost;
+            });
             const stripeClient = res.locals.stripeClient;
             const paymentIntent = await stripeClient.paymentIntents.create({
                 amount,
@@ -70,9 +64,7 @@ app.post("/paymentIntent", addStripeClient, async (req, res) => {
                 .status(200);
         }
         catch (e) {
-            res
-                .json({ error: "Failed to create payment intnet", detail: e })
-                .status(500);
+            res.json({ error: e }).status(500);
         }
     }
     else {
@@ -102,10 +94,8 @@ app.post("/paymentMethodCustomer", addStripeClient, async (req, res) => {
                 res.json({ message: "No customers found" }).status(200);
             }
         }
-        catch (e) {
-            res
-                .json({ error: "Failed to retrieve payment methods", detail: e })
-                .status(500);
+        catch {
+            res.json({ error: "Failed to retrieve payment methods" }).status(500);
         }
     }
     else {
@@ -128,43 +118,36 @@ app.post("/paymentIntentUpdateCustomer", addStripeClient, async (req, res) => {
                 res.json({ error: "Failed to update payment intent" }).status(400);
             }
         }
-        catch (e) {
-            res
-                .json({ error: "Failed to update payment intent", detail: e })
-                .status(500);
+        catch {
+            res.json({ error: "Failed to update payment intent" }).status(500);
         }
     }
     else {
         res.json({ error: "Mising paramaters" }).status(400);
     }
 });
-// EP5: Add customer to the payment intent for returning customers
+// EP4: Add customer to the payment intent for returning customers
 app.post("/paymentIntentUpdateItems", addStripeClient, async (req, res) => {
-    const { paymentIntentId, fruitBasket, } = req.body;
-    if (fruitBasket) {
-        if (paymentIntentId && fruitBasket) {
-            try {
-                const amount = getBasketTotal(fruitBasket);
-                const stripeClient = res.locals.stripeClient;
-                const paymentIntent = await stripeClient.paymentIntents.update(paymentIntentId, {
-                    amount,
-                });
-                if (paymentIntent.amount === amount) {
-                    res.json({ paymentIntent }).status(200);
-                }
-                else {
-                    res.json({ error: "Failed to update payment intent" }).status(400);
-                }
+    const { paymentIntentId, customerId } = req.body;
+    if (paymentIntentId && customerId) {
+        try {
+            const stripeClient = res.locals.stripeClient;
+            const paymentIntent = await stripeClient.paymentIntents.update(paymentIntentId, {
+                customer: customerId,
+            });
+            if (paymentIntent.customer) {
+                res.json({ paymentIntent }).status(200);
             }
-            catch (e) {
-                res
-                    .json({ error: "Failed to update payment intent", detail: e })
-                    .status(500);
+            else {
+                res.json({ error: "Failed to update payment intent" }).status(400);
             }
         }
-        else {
-            res.json({ error: "Mising paramaters" }).status(400);
+        catch {
+            res.json({ error: "Failed to update payment intent" }).status(500);
         }
+    }
+    else {
+        res.json({ error: "Mising paramaters" }).status(400);
     }
 });
 // EP6: Setup future usage
@@ -183,10 +166,8 @@ app.post("/paymentIntentUpdateFutureUsage", addStripeClient, async (req, res) =>
                 res.json({ error: "Failed to update payment intent" }).status(400);
             }
         }
-        catch (e) {
-            res
-                .json({ error: "Failed to update payment intent", detail: e })
-                .status(500);
+        catch {
+            res.json({ error: "Failed to update payment intent" }).status(500);
         }
     }
     else {
@@ -207,10 +188,8 @@ app.post("/paymentMethodDetach", addStripeClient, async (req, res) => {
                 res.json({ error: "Failed to update payment method" }).status(400);
             }
         }
-        catch (e) {
-            res
-                .json({ error: "Failed to update payment method", detail: e })
-                .status(500);
+        catch {
+            res.json({ error: "Failed to update payment method" }).status(500);
         }
     }
     else {
@@ -219,34 +198,26 @@ app.post("/paymentMethodDetach", addStripeClient, async (req, res) => {
 });
 // EP8: Create customer and add to existing Payment Intent
 app.post("/paymentIntentAddCustomer", addStripeClient, async (req, res) => {
-    const { customerEmail, customerAddress, paymentIntentId } = req.body;
-    if (customerEmail && customerAddress && paymentIntentId) {
+    const { email, paymentIntentId } = req.body;
+    if (email && paymentIntentId) {
         try {
             const stripeClient = res.locals.stripeClient;
-            const { name, address } = customerAddress;
-            const customer = await stripeClient.customers.create({
-                email: customerEmail,
-                name,
-                address,
-            });
+            const customer = await stripeClient.customers.create({ email });
             if (customer.id) {
                 const paymentIntent = await stripeClient.paymentIntents.update(paymentIntentId, {
                     customer: customer.id,
                 });
-                if (paymentIntent.id) {
-                    res.json({ paymentIntentId: paymentIntentId.id }).status(200);
-                }
-                else {
-                    res.json({ error: "Failed to update payment intent" }).status(400);
-                }
+            }
+            if (paymentIntentId.id) {
+                res.json({ paymentIntentId: paymentIntentId.id }).status(200);
+            }
+            else {
+                res.json({ error: "Failed to update payment intent" }).status(400);
             }
         }
-        catch (e) {
+        catch {
             res
-                .json({
-                error: "Failed to add customer and update payment intent",
-                detail: e,
-            })
+                .json({ error: "Failed to add customer and update payment intent" })
                 .status(500);
         }
     }

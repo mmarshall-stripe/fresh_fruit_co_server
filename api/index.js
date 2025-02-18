@@ -3,6 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+// @ts-nocheck
 // ================== Package Imports ==================
 require("dotenv").config();
 const express_1 = __importDefault(require("express"));
@@ -18,7 +19,11 @@ app.use((0, cors_1.default)());
 // M1: Init Stripe client
 const addStripeClient = async (req, res, next) => {
     try {
+        // const stripe = new Stripe(process.env.STRIPE_TEST_KEY as string, {
+        //   apiVersion: "2024-06-20; embedded_connect_beta=v2;",
+        // });
         const stripe = new stripe_1.default(process.env.STRIPE_TEST_KEY);
+        console.log(stripe);
         // Enrich res.locals
         res.locals.stripeClient = stripe;
         // Next
@@ -55,10 +60,7 @@ app.post("/paymentIntent", addStripeClient, async (req, res) => {
             const paymentIntent = await stripeClient.paymentIntents.create({
                 amount,
                 currency: "gbp",
-                // Card & BACS
-                //   payment_method_configuration: "pmc_1PdYTyEcWtsOmG7WMJ9bnHKE",
-                // Card Only
-                //   payment_method_configuration: "pmc_1Pg1y0EcWtsOmG7W2JAn5Yys",
+                payment_method_types: ["pay_by_bank"],
             });
             // Return client secret to the front end
             const { id, client_secret } = paymentIntent;
@@ -254,7 +256,100 @@ app.post("/paymentIntentAddCustomer", addStripeClient, async (req, res) => {
         res.json({ error: "Mising paramaters" }).status(400);
     }
 });
+app.post("/createAccountSession", addStripeClient, async (req, res) => {
+    try {
+        const stripeClient = res.locals.stripeClient;
+        const accountSession = await stripeClient.accountSessions.create({
+            // account: "acct_1PgOx9FedHP9Jgej",
+            // ACT DETAILS
+            // account: "acct_1Q5UzrIXG9Ac5TuX",
+            // FRESH ACT
+            // account: "acct_1Q5VFqI69ZWsPNKQ",
+            // account: "acct_1Q5S2JIsupeQNosj",
+            // account: "acct_1Q5S2JIsupeQNosj",
+            account: "acct_1QVUexImeL3n4brM",
+            components: {
+                account_onboarding: {
+                    enabled: true,
+                    features: {
+                        external_account_collection: true,
+                    },
+                },
+                payments: {
+                    enabled: true,
+                    features: {
+                        refund_management: true,
+                        dispute_management: true,
+                        capture_payments: true,
+                    },
+                },
+                account_management: {
+                    enabled: true,
+                    features: {
+                        external_account_collection: true,
+                    },
+                },
+                // payment_method_settings: {
+                //   enabled: true,
+                // },
+                notification_banner: {
+                    enabled: true,
+                    features: {
+                        external_account_collection: true,
+                    },
+                },
+            },
+        });
+        res.json({
+            client_secret: accountSession.client_secret,
+        });
+    }
+    catch (error) {
+        console.error("An error occurred when calling the Stripe API to create an account session", error);
+        res.status(500);
+        res.send({ error: error.message });
+    }
+});
+app.post("/connection_token", addStripeClient, async (req, res) => {
+    console.log(req);
+});
+app.post("/webhook", express_1.default.raw({ type: "application/json" }), addStripeClient, (req, res) => {
+    console.log("webhook received");
+    let event;
+    const sig = req.headers["stripe-signature"];
+    if (sig) {
+        try {
+            const stripeClient = res.locals.stripeClient;
+            event = stripeClient.webhooks.constructEvent(req.body, sig, process.env.ENDPOINT_SECRET);
+            console.log(event.data.object);
+            // Handle the event
+            switch (event.type) {
+                case "payment_intent.succeeded":
+                    const paymentIntent = event.data.object;
+                    // Then define and call a method to handle the successful payment intent.
+                    // handlePaymentIntentSucceeded(paymentIntent);
+                    break;
+                case "payment_method.attached":
+                    const paymentMethod = event.data.object;
+                    // Then define and call a method to handle the successful attachment of a PaymentMethod.
+                    // handlePaymentMethodAttached(paymentMethod);
+                    break;
+                // ... handle other event types
+                default:
+                    console.log(`Unhandled event type ${event.type}`);
+            }
+            // Return a response to acknowledge receipt of the event
+            res.json({ received: true });
+        }
+        catch {
+            res.status(500);
+        }
+    }
+    else {
+        res.status(500);
+    }
+});
 // ================== Server Setup ==================
-const port = process.env.PORT || "3000";
+const port = process.env.PORT || "7001";
 app.listen(port, () => console.log(`===== Server running on port ${port} =====`));
 exports.default = app;

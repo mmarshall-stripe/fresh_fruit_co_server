@@ -60,7 +60,7 @@ app.post("/paymentIntent", addStripeClient, async (req, res) => {
             const paymentIntent = await stripeClient.paymentIntents.create({
                 amount,
                 currency: "gbp",
-                payment_method_types: ["pay_by_bank"],
+                payment_method_types: ["pay_by_bank", "card"],
             });
             // Return client secret to the front end
             const { id, client_secret } = paymentIntent;

@@ -61,6 +61,7 @@ app.post("/paymentIntent", addStripeClient, async (req, res) => {
                 amount,
                 currency: "gbp",
                 payment_method_types: ["pay_by_bank", "card"],
+                customer: "cus_Rnmsr2FadYSZ1Y",
             });
             // Return client secret to the front end
             const { id, client_secret } = paymentIntent;

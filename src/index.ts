@@ -69,6 +69,7 @@ app.post(
           currency: "gbp",
           payment_method_types: ["pay_by_bank", "card"],
           customer: "cus_Rnmsr2FadYSZ1Y",
+          receipt_email: "mark.marshallgp@gmail.com",
         });
         // Return client secret to the front end
         const { id, client_secret } = paymentIntent;
